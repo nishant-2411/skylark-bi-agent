@@ -1,0 +1,853 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Skylark BI Agent</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&family=Playfair+Display:wght@700&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg:       #0d0f14;
+  --surface:  #13161e;
+  --s2:       #1a1e2a;
+  --s3:       #222736;
+  --border:   #2a2f3f;
+  --amber:    #f0a500;
+  --amber2:   #c97d00;
+  --teal:     #2dd4bf;
+  --blue:     #60a5fa;
+  --green:    #34d399;
+  --red:      #f87171;
+  --purple:   #a78bfa;
+  --text:     #e2e5ef;
+  --muted:    #5c647a;
+  --muted2:   #3d4358;
+  --font:     'DM Sans', sans-serif;
+  --mono:     'DM Mono', monospace;
+  --display:  'Playfair Display', serif;
+}
+
+html, body {
+  height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font);
+  overflow: hidden;
+}
+
+body::after {
+  content: ''; position: fixed; inset: 0; pointer-events: none; z-index: 9999;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23n)' opacity='0.035'/%3E%3C/svg%3E");
+  opacity: 0.6;
+}
+
+/* ── FIXED LAYOUT ── */
+.shell {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  overflow: hidden;
+}
+
+.eval-banner {
+  flex-shrink: 0;
+  background: rgba(240,165,0,.12);
+  border-bottom: 1px solid rgba(240,165,0,.3);
+  padding: 8px 20px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 12px;
+  color: var(--amber);
+}
+.eval-banner strong { font-weight: 600; }
+.eval-banner a { color: var(--teal); text-decoration: underline; cursor: pointer; }
+
+.topbar {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 0 20px;
+  height: 56px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  position: relative;
+}
+.topbar::after {
+  content: ''; position: absolute; bottom: 0; left: 0; right: 0; height: 1px;
+  background: linear-gradient(90deg, transparent 0%, var(--amber) 40%, transparent 100%);
+  opacity: 0.3;
+}
+
+.main-area {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+  min-height: 0;
+}
+
+/* ── Sidebar ── */
+.sidebar {
+  width: 260px;
+  flex-shrink: 0;
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  padding: 18px 14px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+.sidebar::-webkit-scrollbar { width: 3px; }
+.sidebar::-webkit-scrollbar-thumb { background: var(--border); }
+
+/* ── Chat ── */
+.chat-wrap {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-width: 0;
+}
+
+/* ── Trace panel ── */
+.trace-panel {
+  width: 320px;
+  flex-shrink: 0;
+  background: var(--surface);
+  border-left: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* ── Topbar elements ── */
+.logo-mark {
+  width: 30px; height: 30px; border-radius: 7px; flex-shrink: 0;
+  background: linear-gradient(135deg, var(--amber) 0%, var(--amber2) 100%);
+  display: flex; align-items: center; justify-content: center; font-size: 15px;
+}
+.logo-text { font-family: var(--display); font-size: 17px; letter-spacing: 0.3px; }
+.logo-text span { color: var(--amber); }
+.topbar-gap { flex: 1; }
+.live-badge {
+  display: flex; align-items: center; gap: 6px;
+  padding: 4px 11px; border-radius: 20px;
+  border: 1px solid var(--border); background: var(--s2);
+  font-family: var(--mono); font-size: 10.5px; color: var(--muted);
+}
+.live-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--muted); flex-shrink: 0; }
+.live-dot.on { background: var(--green); animation: blink 2s infinite; }
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:.35} }
+.cfg-btn {
+  padding: 5px 13px; border-radius: 8px; cursor: pointer;
+  background: var(--s3); border: 1px solid var(--border);
+  color: var(--muted); font-family: var(--mono); font-size: 11px;
+  transition: all .15s;
+}
+.cfg-btn:hover { border-color: var(--amber); color: var(--amber); }
+
+/* ── Sidebar elements ── */
+.sec-label {
+  font-family: var(--mono); font-size: 9.5px; letter-spacing: 2px;
+  text-transform: uppercase; color: var(--muted); margin-bottom: 9px;
+}
+.quick-btns { display: flex; flex-direction: column; gap: 5px; }
+.qbtn {
+  text-align: left; background: transparent; border: 1px solid var(--border);
+  border-radius: 8px; padding: 9px 11px; cursor: pointer;
+  font-family: var(--font); font-size: 12px; color: var(--text);
+  line-height: 1.4; transition: all .15s;
+}
+.qbtn:hover { border-color: var(--amber); color: var(--amber); background: rgba(240,165,0,.04); }
+.board-cards { display: flex; flex-direction: column; gap: 7px; }
+.board-card {
+  display: flex; align-items: center; gap: 9px; padding: 10px 11px;
+  border: 1px solid var(--border); border-radius: 9px;
+  font-size: 12px; color: var(--muted);
+  text-decoration: none; transition: all .15s;
+}
+.board-card:hover { border-color: var(--teal); color: var(--teal); }
+.board-pip { width: 8px; height: 8px; border-radius: 2px; flex-shrink: 0; }
+.pip-deals { background: var(--amber); }
+.pip-wo    { background: var(--teal); }
+.clear-btn {
+  width: 100%; padding: 9px; background: transparent; cursor: pointer;
+  border: 1px solid var(--border); border-radius: 8px;
+  color: var(--muted); font-family: var(--mono); font-size: 11px;
+  text-align: left; transition: all .15s;
+}
+.clear-btn:hover { border-color: var(--red); color: var(--red); }
+
+/* ── Chat messages ── */
+.msgs {
+  flex: 1;
+  overflow-y: auto;
+  padding: 22px 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  scroll-behavior: smooth;
+  min-height: 0;
+}
+.msgs::-webkit-scrollbar { width: 4px; }
+.msgs::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+.welcome-screen {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  text-align: center;
+  padding: 48px;
+}
+.welcome-icon { font-size: 52px; margin-bottom: 4px; }
+.welcome-screen h2 { font-family: var(--display); font-size: 24px; }
+.welcome-screen p { font-size: 13.5px; color: var(--muted); max-width: 380px; line-height: 1.7; }
+.welcome-chips { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-top: 8px; }
+.chip {
+  padding: 6px 14px; border: 1px solid var(--border); border-radius: 20px;
+  font-size: 12px; color: var(--muted); cursor: pointer; transition: all .15s;
+}
+.chip:hover { border-color: var(--amber); color: var(--amber); }
+
+.msg { display: flex; flex-direction: column; gap: 5px; }
+.msg.user { align-items: flex-end; }
+.msg.agent { align-items: flex-start; }
+.msg-meta { font-family: var(--mono); font-size: 10px; color: var(--muted); }
+.bubble {
+  padding: 13px 16px; border-radius: 12px;
+  font-size: 13.5px; line-height: 1.65; max-width: 780px;
+}
+.msg.user .bubble {
+  background: linear-gradient(135deg, var(--amber) 0%, var(--amber2) 100%);
+  color: #0d0f14; font-weight: 500;
+  border-radius: 12px 12px 3px 12px;
+}
+.msg.agent .bubble {
+  background: var(--s2); border: 1px solid var(--border);
+  border-radius: 12px 12px 12px 3px;
+  white-space: pre-wrap;
+}
+.msg.agent .bubble h2, .msg.agent .bubble h3 {
+  font-family: var(--display); font-size: 15px; color: var(--amber);
+  margin: 10px 0 5px;
+}
+.msg.agent .bubble strong { color: var(--text); font-weight: 600; }
+.msg.agent .bubble ul, .msg.agent .bubble ol { padding-left: 20px; margin: 6px 0; }
+.msg.agent .bubble li { margin: 3px 0; }
+.msg.agent .bubble code {
+  background: var(--bg); border: 1px solid var(--border);
+  border-radius: 4px; padding: 1px 5px; font-family: var(--mono); font-size: 12px;
+}
+.msg.agent.clarifying .bubble {
+  border-color: rgba(240,165,0,.5);
+  background: rgba(240,165,0,.07);
+}
+.clarify-label {
+  font-family: var(--mono); font-size: 10px; color: var(--amber);
+  letter-spacing: 1px; text-transform: uppercase; margin-bottom: 5px;
+  display: block;
+}
+
+.typing { display: flex; align-items: center; gap: 5px; padding: 4px 0; }
+.typing span {
+  width: 7px; height: 7px; border-radius: 50%; background: var(--muted);
+  animation: bounce-dot 1.2s infinite;
+}
+.typing span:nth-child(2) { animation-delay: .18s; }
+.typing span:nth-child(3) { animation-delay: .36s; }
+@keyframes bounce-dot { 0%,80%,100%{transform:scale(.75);opacity:.5} 40%{transform:scale(1.1);opacity:1} }
+
+/* ── Input bar ── */
+.input-bar {
+  flex-shrink: 0;
+  padding: 14px 20px 18px;
+  border-top: 1px solid var(--border);
+  background: var(--surface);
+}
+.input-row { display: flex; gap: 8px; align-items: flex-end; }
+.input-shell {
+  flex: 1; border: 1px solid var(--border); border-radius: 12px;
+  background: var(--s2); display: flex; align-items: center;
+  transition: border-color .2s;
+}
+.input-shell:focus-within { border-color: var(--amber); }
+#qinput {
+  flex: 1; background: transparent; border: none; outline: none;
+  color: var(--text); font-family: var(--font); font-size: 13.5px;
+  padding: 13px 15px; resize: none; line-height: 1.5;
+  min-height: 46px; max-height: 120px;
+}
+#qinput::placeholder { color: var(--muted); }
+#send-btn {
+  width: 42px; height: 42px; margin: 3px; border-radius: 10px; flex-shrink: 0;
+  background: linear-gradient(135deg, var(--amber), var(--amber2));
+  border: none; cursor: pointer; color: #0d0f14; font-size: 18px; font-weight: 700;
+  display: flex; align-items: center; justify-content: center;
+  transition: all .15s;
+}
+#send-btn:hover:not(:disabled) { transform: scale(1.07); }
+#send-btn:disabled { opacity: .4; cursor: not-allowed; }
+
+/* ── Trace panel ── */
+.trace-topbar {
+  flex-shrink: 0;
+  padding: 14px 14px 11px;
+  border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: space-between;
+}
+.trace-title { font-family: var(--mono); font-size: 10px; letter-spacing: 1.8px; text-transform: uppercase; color: var(--muted); }
+.trace-badge {
+  font-family: var(--mono); font-size: 10px; padding: 2px 8px;
+  border-radius: 10px; border: 1px solid var(--border); background: var(--s2); color: var(--muted);
+}
+.trace-scroll {
+  flex: 1; overflow-y: auto; padding: 10px;
+  display: flex; flex-direction: column; gap: 7px;
+  min-height: 0;
+}
+.trace-scroll::-webkit-scrollbar { width: 3px; }
+.trace-scroll::-webkit-scrollbar-thumb { background: var(--border); }
+.trace-empty {
+  height: 100%; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 8px;
+  color: var(--muted); font-family: var(--mono); font-size: 11px;
+  text-align: center; padding: 20px;
+}
+
+.te {
+  border: 1px solid var(--border); border-radius: 9px; overflow: hidden;
+  animation: slide-right .2s ease;
+}
+@keyframes slide-right { from{opacity:0;transform:translateX(6px)} to{opacity:1;transform:translateX(0)} }
+.te-head {
+  display: flex; align-items: center; gap: 8px; padding: 8px 10px;
+  cursor: pointer; background: var(--s2); user-select: none;
+}
+.te-head:hover { background: var(--s3); }
+.te-tag {
+  font-family: var(--mono); font-size: 8.5px; letter-spacing: 1px;
+  text-transform: uppercase; padding: 2px 7px; border-radius: 4px; font-weight: 500; flex-shrink: 0;
+}
+.tag-tool_call   { background: rgba(96,165,250,.18); color: var(--blue);   border: 1px solid rgba(96,165,250,.3); }
+.tag-tool_result { background: rgba(52,211,153,.15); color: var(--green);  border: 1px solid rgba(52,211,153,.3); }
+.tag-thinking    { background: rgba(240,165,0,.14);  color: var(--amber);  border: 1px solid rgba(240,165,0,.3); }
+.tag-answer      { background: rgba(167,139,250,.15);color: var(--purple); border: 1px solid rgba(167,139,250,.3); }
+.tag-tool_error  { background: rgba(248,113,113,.15);color: var(--red);    border: 1px solid rgba(248,113,113,.3); }
+.te-label { font-family: var(--mono); font-size: 11px; color: var(--text); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.te-time  { font-family: var(--mono); font-size: 9px; color: var(--muted); flex-shrink: 0; }
+.te-chev  { font-size: 9px; color: var(--muted); transition: transform .18s; flex-shrink: 0; }
+.te.open .te-chev { transform: rotate(90deg); }
+.te-body  { display: none; padding: 10px; background: var(--bg); border-top: 1px solid var(--border); }
+.te.open .te-body { display: block; }
+.te-pre {
+  font-family: var(--mono); font-size: 10px; color: var(--muted);
+  white-space: pre-wrap; word-break: break-all;
+  max-height: 200px; overflow-y: auto;
+}
+.te-pre::-webkit-scrollbar { width: 3px; }
+.te-pre::-webkit-scrollbar-thumb { background: var(--border); }
+
+/* ── Config modal ── */
+.overlay {
+  position: fixed; inset: 0; z-index: 200;
+  background: rgba(0,0,0,.72); backdrop-filter: blur(5px);
+  display: none; align-items: center; justify-content: center;
+}
+.overlay.visible { display: flex; }
+.modal {
+  background: var(--surface); border: 1px solid var(--border); border-radius: 16px;
+  padding: 30px; width: 460px; max-width: 95vw;
+  display: flex; flex-direction: column; gap: 18px;
+  animation: pop-in .2s ease;
+}
+@keyframes pop-in { from{opacity:0;transform:scale(.96)} to{opacity:1;transform:scale(1)} }
+.modal h2 { font-family: var(--display); font-size: 20px; }
+.modal-note {
+  padding: 10px 13px; border-radius: 8px; font-size: 11.5px; line-height: 1.5;
+  background: rgba(240,165,0,.1); border: 1px solid rgba(240,165,0,.25); color: var(--amber);
+}
+.field { display: flex; flex-direction: column; gap: 5px; }
+.field label { font-family: var(--mono); font-size: 10px; letter-spacing: 1.2px; text-transform: uppercase; color: var(--muted); }
+.field input {
+  background: var(--s2); border: 1px solid var(--border); border-radius: 8px;
+  padding: 10px 12px; color: var(--text); font-family: var(--mono); font-size: 12.5px;
+  outline: none; transition: border-color .15s;
+}
+.field input:focus { border-color: var(--amber); }
+.modal-actions { display: flex; gap: 10px; }
+.btn-primary {
+  flex: 1; padding: 11px 20px; border: none; border-radius: 10px; cursor: pointer;
+  background: linear-gradient(135deg, var(--amber), var(--amber2));
+  color: #0d0f14; font-family: var(--font); font-weight: 600; font-size: 13.5px;
+  transition: all .15s;
+}
+.btn-primary:hover { transform: translateY(-1px); }
+.btn-secondary {
+  padding: 11px 18px; border-radius: 10px; cursor: pointer;
+  background: transparent; border: 1px solid var(--border);
+  color: var(--muted); font-family: var(--font); font-size: 13px;
+  transition: all .15s;
+}
+.btn-secondary:hover { border-color: var(--muted); color: var(--text); }
+
+/* ── Quality widget ── */
+.quality-widget {
+  border: 1px solid rgba(240,165,0,.25); border-radius: 8px;
+  background: rgba(240,165,0,.06); padding: 10px 13px;
+  font-size: 12px; color: var(--amber); line-height: 1.6;
+  margin-top: 6px;
+}
+.quality-widget strong { color: var(--amber); }
+</style>
+</head>
+<body>
+
+<!-- Config Modal -->
+<div class="overlay" id="cfg-overlay">
+  <div class="modal">
+    <h2>⚙ Connect to Monday.com</h2>
+    <p style="font-size:13px;color:var(--muted);line-height:1.6">Enter your credentials to enable live data fetching. They're stored in your browser only.</p>
+    <div class="modal-note">ℹ AI powered by Groq (llama-3.3-70b). Monday.com credentials stay in your browser — never stored server-side.</div>
+    <div class="field">
+      <label>Backend URL</label>
+      <input id="cfg-backend" placeholder="https://your-app.onrender.com" value="http://localhost:8000">
+    </div>
+    <div class="field">
+      <label>Monday.com API Token</label>
+      <input id="cfg-monday" type="password" placeholder="eyJhbGci…">
+    </div>
+    <div class="field">
+      <label>Deals Board ID</label>
+      <input id="cfg-deals" placeholder="1234567890">
+    </div>
+    <div class="field">
+      <label>Work Orders Board ID</label>
+      <input id="cfg-wo" placeholder="9876543210">
+    </div>
+    <div class="modal-actions">
+      <button class="btn-primary" onclick="saveConfig()">Connect →</button>
+      <button class="btn-secondary" onclick="closeModal()">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<div class="shell">
+
+  <!-- Eval banner (hidden by default, shown when not configured) -->
+  <div class="eval-banner" id="eval-banner" style="display:none">
+    <strong>👋 Note:</strong>
+    This app needs your Monday.com credentials to fetch live data. Click
+    <a onclick="openModal()">⚙ Config</a> to enter them. &nbsp;|&nbsp;
+    <a onclick="document.getElementById('eval-banner').style.display='none'">Dismiss</a>
+  </div>
+
+  <!-- Topbar -->
+  <header class="topbar">
+    <div class="logo-mark">🛸</div>
+    <div class="logo-text">Skylark <span>BI</span></div>
+    <div class="topbar-gap"></div>
+    <div class="live-badge">
+      <div class="live-dot" id="live-dot"></div>
+      <span id="live-label">Not configured</span>
+    </div>
+    <button class="cfg-btn" onclick="openModal()">⚙ Config</button>
+  </header>
+
+  <!-- Main 3-column area -->
+  <div class="main-area">
+
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <div>
+        <div class="sec-label">Quick queries</div>
+        <div class="quick-btns" id="quick-btns"></div>
+      </div>
+      <div>
+        <div class="sec-label">Boards</div>
+        <div class="board-cards">
+          <a href="#" class="board-card" id="link-deals" target="_blank">
+            <div class="board-pip pip-deals"></div> Deal Funnel
+          </a>
+          <a href="#" class="board-card" id="link-wo" target="_blank">
+            <div class="board-pip pip-wo"></div> Work Order Tracker
+          </a>
+        </div>
+      </div>
+      <div>
+        <div class="sec-label">Session</div>
+        <button class="clear-btn" onclick="clearSession()">🗑 Clear conversation</button>
+      </div>
+    </aside>
+
+    <!-- Chat -->
+    <main class="chat-wrap">
+      <div class="msgs" id="msgs">
+        <div class="welcome-screen" id="welcome">
+          <div class="welcome-icon">📊</div>
+          <h2>Monday.com BI Agent</h2>
+          <p>Ask founder-level business questions. Live data is fetched from your Monday.com boards on every query — nothing is cached.</p>
+          <div class="welcome-chips" id="welcome-chips"></div>
+        </div>
+      </div>
+      <div class="input-bar">
+        <div class="input-row">
+          <div class="input-shell">
+            <textarea id="qinput" placeholder="Ask about pipeline, revenue, sectors, work orders…" rows="1"
+              onkeydown="onKey(event)" oninput="resize(this)"></textarea>
+          </div>
+          <button id="send-btn" onclick="send()">↑</button>
+        </div>
+      </div>
+    </main>
+
+    <!-- Trace panel -->
+    <aside class="trace-panel">
+      <div class="trace-topbar">
+        <span class="trace-title">API Trace</span>
+        <span class="trace-badge" id="trace-count">0 events</span>
+      </div>
+      <div class="trace-scroll" id="trace-scroll">
+        <div class="trace-empty" id="trace-empty">
+          <span style="font-size:24px">🔍</span>
+          API calls will appear here when you ask a question
+        </div>
+      </div>
+    </aside>
+
+  </div><!-- /.main-area -->
+</div><!-- /.shell -->
+
+<script>
+/* ── State ── */
+let cfg = { backend: 'http://localhost:8000', mondayKey: '', dealsId: '', woId: '' };
+let history = [];
+let allTrace = [];
+let busy = false;
+
+const SAMPLES = [
+  "How's our pipeline looking this quarter?",
+  "Which sector has the highest deal value?",
+  "What's total accounts receivable across work orders?",
+  "Show deals closing this month",
+  "How many deals are in negotiation stage?",
+  "Top performing deal owners",
+  "Work orders by execution status",
+  "Compare Mining vs Renewables pipeline",
+  "What's our collection rate?",
+  "High-probability open deals summary",
+];
+
+/* ── Init ── */
+function init() {
+  const autoBackend = window.location.origin;
+
+  const qb = document.getElementById('quick-btns');
+  const wc = document.getElementById('welcome-chips');
+  SAMPLES.forEach((s, i) => {
+    const b = document.createElement('button');
+    b.className = 'qbtn'; b.textContent = s;
+    b.onclick = () => { document.getElementById('qinput').value = s; send(); };
+    qb.appendChild(b);
+    if (i < 6) {
+      const c = document.createElement('span');
+      c.className = 'chip'; c.textContent = s;
+      c.onclick = () => { document.getElementById('qinput').value = s; send(); };
+      wc.appendChild(c);
+    }
+  });
+
+  try {
+    const saved = localStorage.getItem('skylark-bi-cfg');
+    if (saved) {
+      cfg = JSON.parse(saved);
+      if (!cfg.backend || cfg.backend === 'http://localhost:8000') {
+        cfg.backend = autoBackend;
+      }
+      document.getElementById('cfg-backend').value = cfg.backend;
+      document.getElementById('cfg-monday').value  = cfg.mondayKey;
+      document.getElementById('cfg-deals').value   = cfg.dealsId;
+      document.getElementById('cfg-wo').value      = cfg.woId;
+      if (!cfg.mondayKey || !cfg.dealsId || !cfg.woId) {
+        document.getElementById('eval-banner').style.display = 'flex';
+      }
+      applyConfig();
+    } else {
+      document.getElementById('cfg-backend').value = autoBackend;
+      document.getElementById('eval-banner').style.display = 'flex';
+      openModal();
+    }
+  } catch {
+    document.getElementById('cfg-backend').value = autoBackend;
+    openModal();
+  }
+}
+
+/* ── Config modal ── */
+function openModal()  { document.getElementById('cfg-overlay').classList.add('visible'); }
+function closeModal() { document.getElementById('cfg-overlay').classList.remove('visible'); }
+
+function saveConfig() {
+  cfg.backend   = document.getElementById('cfg-backend').value.trim().replace(/\/$/, '');
+  cfg.mondayKey = document.getElementById('cfg-monday').value.trim();
+  cfg.dealsId   = document.getElementById('cfg-deals').value.trim();
+  cfg.woId      = document.getElementById('cfg-wo').value.trim();
+  localStorage.setItem('skylark-bi-cfg', JSON.stringify(cfg));
+  closeModal();
+  applyConfig();
+}
+
+async function applyConfig() {
+  if (cfg.dealsId) document.getElementById('link-deals').href = `https://nishant24gss-team.monday.com/boards/${cfg.dealsId}`;
+  if (cfg.woId)    document.getElementById('link-wo').href    = `https://nishant24gss-team.monday.com/boards/${cfg.woId}`;
+  try {
+    const r = await fetch(`${cfg.backend}/api/health`, { headers: buildHeaders() });
+    const d = await r.json();
+    if (d.monday_configured && d.groq_configured) {
+      setLive(true, 'Checking boards…');
+      verifyBoards();
+    } else if (!d.monday_configured) {
+      setLive(false, 'No Monday.com key');
+    } else {
+      setLive(false, 'No Groq API key');
+    }
+  } catch {
+    setLive(false, 'Backend offline');
+  }
+}
+
+async function verifyBoards() {
+  try {
+    const r = await fetch(`${cfg.backend}/api/verify-boards`, { headers: buildHeaders() });
+    const d = await r.json();
+    const dealsOk = d.deals && d.deals.startsWith('ok');
+    const woOk    = d.workorders && d.workorders.startsWith('ok');
+    if (dealsOk && woOk) {
+      setLive(true, `Connected · ${d.deals.split('(')[0].replace('ok: ','').trim()}`);
+      document.getElementById('eval-banner').style.display = 'none';
+    } else {
+      const msg = [];
+      if (!dealsOk) msg.push(`Deals: ${d.deals}`);
+      if (!woOk)    msg.push(`WO: ${d.workorders}`);
+      setLive(false, 'Board error — see Config');
+      showBoardError(msg.join(' | '));
+    }
+  } catch {
+    setLive(false, 'Verify failed');
+  }
+}
+
+function showBoardError(msg) {
+  const banner = document.getElementById('eval-banner');
+  banner.style.display = 'flex';
+  banner.innerHTML = `<strong>⚠ Board Error:</strong>&nbsp;${msg}&nbsp;|&nbsp;` +
+    `<a onclick="openModal()">Fix in Config</a>&nbsp;|&nbsp;` +
+    `<a onclick="this.closest('.eval-banner').style.display='none'">Dismiss</a>`;
+}
+
+function setLive(on, label) {
+  document.getElementById('live-dot').className    = 'live-dot' + (on ? ' on' : '');
+  document.getElementById('live-label').textContent = label;
+}
+
+function buildHeaders() {
+  return {
+    'Content-Type':  'application/json',
+    'X-Monday-Key':  cfg.mondayKey,
+    'X-Deals-Board': cfg.dealsId,
+    'X-Wo-Board':    cfg.woId,
+  };
+}
+
+/* ── Chat ── */
+function onKey(e) {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
+}
+function resize(el) {
+  el.style.height = 'auto';
+  el.style.height = Math.min(el.scrollHeight, 120) + 'px';
+}
+
+async function send() {
+  const inp = document.getElementById('qinput');
+  const msg = inp.value.trim();
+  if (!msg || busy) return;
+
+  const welcome = document.getElementById('welcome');
+  if (welcome) welcome.remove();
+
+  inp.value = ''; inp.style.height = '';
+  setBusy(true);
+  addMsg('user', msg);
+  const loadEl = addLoading();
+
+  try {
+    const resp = await fetch(`${cfg.backend}/api/query`, {
+      method: 'POST',
+      headers: buildHeaders(),
+      body: JSON.stringify({ message: msg, history }),
+    });
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({ detail: resp.statusText }));
+      throw new Error(err.detail || 'Request failed');
+    }
+    const data = await resp.json();
+    loadEl.remove();
+    const answerEl = addMsg('agent', data.answer || 'No response generated.');
+    if (data.quality) appendQuality(answerEl, data.quality);
+    history.push({ role: 'user',      content: msg });
+    history.push({ role: 'assistant', content: data.answer || '' });
+    if (data.trace) data.trace.forEach(addTraceEvent);
+  } catch (err) {
+    loadEl.remove();
+    addMsg('agent', `❌ **Error:** ${err.message}\n\nCheck your backend URL and credentials in ⚙ Config.`);
+  } finally {
+    setBusy(false);
+  }
+}
+
+function addMsg(role, content) {
+  const msgs = document.getElementById('msgs');
+  const wrap = document.createElement('div');
+  const isClarifying = role === 'agent' && content.includes('🤔');
+  wrap.className = `msg ${role}${isClarifying ? ' clarifying' : ''}`;
+  const now = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  const meta = document.createElement('div');
+  meta.className = 'msg-meta';
+  meta.textContent = role === 'user' ? `You · ${now}` : `BI Agent · ${now}`;
+  const bubble = document.createElement('div');
+  bubble.className = 'bubble';
+  if (isClarifying) {
+    bubble.innerHTML = '<span class="clarify-label">🤔 Clarifying question</span>' + renderMd(content.replace('🤔 Quick clarification:', '').trim());
+  } else {
+    bubble.innerHTML = role === 'agent' ? renderMd(content) : escHtml(content);
+  }
+  wrap.appendChild(meta);
+  wrap.appendChild(bubble);
+  msgs.appendChild(wrap);
+  msgs.scrollTop = msgs.scrollHeight;
+  return wrap;
+}
+
+function appendQuality(msgEl, q) {
+  if (!q) return;
+  const div = document.createElement('div');
+  div.className = 'quality-widget';
+  const hasIssues = q.issues && q.issues.length > 0;
+  const icon = hasIssues ? '⚠' : '✅';
+  const issuesHtml = hasIssues ? q.issues.map(i => `• ${i}`).join('<br>') : 'No critical data quality issues found.';
+  div.innerHTML =
+    `<strong>${icon} Data Quality</strong> — ` +
+    `${q.deals_rows || 0} deals · ${q.wo_rows || 0} work orders analysed<br>` +
+    `Completeness: Deals ${q.deals_completeness} · Work Orders ${q.wo_completeness}<br>` +
+    issuesHtml;
+  msgEl.appendChild(div);
+}
+
+function addLoading() {
+  const msgs = document.getElementById('msgs');
+  const wrap = document.createElement('div');
+  wrap.className = 'msg agent';
+  wrap.innerHTML = `
+    <div class="msg-meta">BI Agent · thinking…</div>
+    <div class="bubble">
+      <div class="typing"><span></span><span></span><span></span></div>
+    </div>`;
+  msgs.appendChild(wrap);
+  msgs.scrollTop = msgs.scrollHeight;
+  return wrap;
+}
+
+function setBusy(b) {
+  busy = b;
+  document.getElementById('send-btn').disabled = b;
+}
+
+function clearSession() {
+  history = []; allTrace = [];
+  const msgs = document.getElementById('msgs');
+  msgs.innerHTML = `
+    <div class="welcome-screen" id="welcome">
+      <div class="welcome-icon">📊</div>
+      <h2>Monday.com BI Agent</h2>
+      <p>Ask founder-level business questions. Live data fetched from Monday.com on every query.</p>
+    </div>`;
+  document.getElementById('trace-scroll').innerHTML = `
+    <div class="trace-empty" id="trace-empty">
+      <span style="font-size:24px">🔍</span>
+      API calls will appear here when you ask a question
+    </div>`;
+  document.getElementById('trace-count').textContent = '0 events';
+}
+
+/* ── Trace ── */
+function addTraceEvent(ev) {
+  const empty = document.getElementById('trace-empty');
+  if (empty) empty.remove();
+  allTrace.push(ev);
+  document.getElementById('trace-count').textContent = `${allTrace.length} events`;
+  const scroll = document.getElementById('trace-scroll');
+  const te = document.createElement('div');
+  te.className = 'te';
+  const typeLabels = { tool_call:'API Call', tool_result:'Result', thinking:'Thinking', answer:'Answer', tool_error:'Error' };
+  const label = buildLabel(ev);
+  const ts = new Date(ev.timestamp).toLocaleTimeString([], { hour:'2-digit', minute:'2-digit', second:'2-digit' });
+  const bodyContent = typeof ev.content === 'object' ? JSON.stringify(ev.content, null, 2) : String(ev.content);
+  te.innerHTML = `
+    <div class="te-head" onclick="toggleTE(this)">
+      <span class="te-tag tag-${ev.type}">${typeLabels[ev.type] || ev.type}</span>
+      <span class="te-label">${escHtml(label)}</span>
+      <span class="te-time">${ts}</span>
+      <span class="te-chev">▶</span>
+    </div>
+    <div class="te-body">
+      <pre class="te-pre">${escHtml(bodyContent)}</pre>
+    </div>`;
+  scroll.appendChild(te);
+  scroll.scrollTop = scroll.scrollHeight;
+}
+
+function buildLabel(ev) {
+  const c = ev.content || {};
+  switch (ev.type) {
+    case 'tool_call':   return `${c.tool || '?'}(board="${(c.input && c.input.board) || '?'}")`;
+    case 'tool_result': return `${c.tool || '?'} → ${c.rows_fetched ?? '?'} rows`;
+    case 'thinking':    return (c.text || '').slice(0, 55) + '…';
+    case 'answer':      return 'Final answer generated';
+    case 'tool_error':  return `Error: ${(c.error || '').slice(0, 40)}`;
+    default:            return ev.type;
+  }
+}
+
+function toggleTE(head) { head.closest('.te').classList.toggle('open'); }
+
+/* ── Markdown ── */
+function renderMd(text) {
+  if (!text) return '';
+  return text
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/^### (.+)$/gm, '<h3>$1</h3>')
+    .replace(/^## (.+)$/gm,  '<h2>$1</h2>')
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/`(.+?)`/g, '<code>$1</code>')
+    .replace(/^[-•] (.+)$/gm, '<li>$1</li>')
+    .replace(/(<li>.*<\/li>)/gs, '<ul>$1</ul>')
+    .replace(/\n{2,}/g, '</p><p>')
+    .replace(/\n/g, '<br>');
+}
+
+function escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+init();
+</script>
+</body>
+</html>

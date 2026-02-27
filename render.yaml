@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: skylark-bi-agent
+    runtime: python
+    region: singapore
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn backend.main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: GROQ_API_KEY
+        sync: false        # set in Render dashboard
+      - key: MONDAY_API_KEY
+        sync: false        # optional — can also pass from UI
+      - key: DEALS_BOARD_ID
+        value: "5026897246"
+      - key: WORKORDERS_BOARD_ID
+        value: "5026897262"
